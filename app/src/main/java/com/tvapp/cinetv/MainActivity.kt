@@ -16,6 +16,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import java.io.ByteArrayInputStream
+import java.net.URI
 
 class MainActivity : Activity() {
 
@@ -26,13 +27,6 @@ class MainActivity : Activity() {
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
-    /*
-     * Conservative advertising / tracking filter.
-     *
-     * IMPORTANT:
-     * We deliberately do NOT block every third-party request.
-     * Video players commonly use third-party domains.
-     */
     private val blockedAdHosts = setOf(
         "doubleclick.net",
         "googlesyndication.com",
@@ -58,12 +52,6 @@ class MainActivity : Activity() {
         "onclickads.net"
     )
 
-    /*
-     * Obvious ad URL patterns.
-     *
-     * These are only used when the request URL itself strongly
-     * indicates advertising.
-     */
     private val blockedAdPatterns = listOf(
         "/ads/",
         "/adserver/",
@@ -115,7 +103,6 @@ class MainActivity : Activity() {
             document.head.appendChild(style);
 
             function candidates() {
-
                 return Array.from(
                     document.querySelectorAll(
                         'a[href], button, input, select, textarea, [role="button"]'
@@ -151,7 +138,6 @@ class MainActivity : Activity() {
                         preventScroll: true
                     });
                 } catch (e) {
-
                     try {
                         current.focus();
                     } catch (ignore) {}
@@ -263,13 +249,9 @@ class MainActivity : Activity() {
                 }
 
                 try {
-
                     current.click();
-
                 } catch (e) {
-
                     try {
-
                         current.dispatchEvent(
                             new MouseEvent(
                                 'click',
@@ -280,7 +262,6 @@ class MainActivity : Activity() {
                                 }
                             )
                         );
-
                     } catch (ignore) {}
                 }
             }
@@ -331,17 +312,10 @@ class MainActivity : Activity() {
         webView.loadUrl("https://cine.su/en")
     }
 
-    /*
-     * Returns true only for requests that look clearly like
-     * advertising/tracking.
-     */
     private fun isAdRequest(urlString: String): Boolean {
 
         val url = urlString.lowercase()
 
-        /*
-         * Never apply our URL-pattern filter to actual media files.
-         */
         if (url.contains(".mp4") ||
             url.contains(".m3u8") ||
             url.contains(".mpd") ||
@@ -354,14 +328,11 @@ class MainActivity : Activity() {
         }
 
         val host = try {
-            java.net.URI(url).host?.lowercase() ?: ""
+            URI(url).host?.lowercase() ?: ""
         } catch (e: Exception) {
             ""
         }
 
-        /*
-         * Exact / subdomain host matching.
-         */
         for (blockedHost in blockedAdHosts) {
 
             if (host == blockedHost ||
@@ -371,9 +342,6 @@ class MainActivity : Activity() {
             }
         }
 
-        /*
-         * Only block obvious advertising paths/identifiers.
-         */
         for (pattern in blockedAdPatterns) {
 
             if (url.contains(pattern)) {
@@ -406,28 +374,22 @@ class MainActivity : Activity() {
         view.settings.apply {
 
             javaScriptEnabled = true
-
             domStorageEnabled = true
 
             mediaPlaybackRequiresUserGesture = false
 
             builtInZoomControls = false
-
             displayZoomControls = false
-
             setSupportZoom(false)
 
             javaScriptCanOpenWindowsAutomatically = true
-
             setSupportMultipleWindows(true)
 
             databaseEnabled = true
 
-            cacheMode =
-                WebSettings.LOAD_DEFAULT
+            cacheMode = WebSettings.LOAD_DEFAULT
 
             allowFileAccess = false
-
             allowContentAccess = false
 
             mixedContentMode =
@@ -451,10 +413,7 @@ class MainActivity : Activity() {
                     url: String
                 ) {
 
-                    super.onPageFinished(
-                        view,
-                        url
-                    )
+                    super.onPageFinished(view, url)
 
                     view.evaluateJavascript(
                         tvNavigationScript,
@@ -470,19 +429,10 @@ class MainActivity : Activity() {
                     val url =
                         request.url.toString()
 
-                    /*
-                     * Block only requests that our conservative
-                     * filter identifies as advertisements.
-                     */
                     if (isAdRequest(url)) {
                         return emptyResponse()
                     }
 
-                    /*
-                     * Everything else, including player,
-                     * iframe and media requests, continues
-                     * normally through WebView.
-                     */
                     return super.shouldInterceptRequest(
                         view,
                         request
@@ -515,8 +465,7 @@ class MainActivity : Activity() {
                         newWebView
 
                     val decorView =
-                        window.decorView
-                            as ViewGroup
+                        window.decorView as ViewGroup
 
                     decorView.addView(
                         newWebView,
@@ -529,8 +478,7 @@ class MainActivity : Activity() {
                     newWebView.bringToFront()
 
                     val transport =
-                        resultMsg.obj
-                            as WebView.WebViewTransport
+                        resultMsg.obj as WebView.WebViewTransport
 
                     transport.webView =
                         newWebView
@@ -555,24 +503,17 @@ class MainActivity : Activity() {
                     if (customView != null) {
 
                         callback.onCustomViewHidden()
-
                         return
                     }
 
                     customView = view
+                    customViewCallback = callback
 
-                    customViewCallback =
-                        callback
-
-                    webView.visibility =
-                        View.GONE
-
-                    popupWebView?.visibility =
-                        View.GONE
+                    webView.visibility = View.GONE
+                    popupWebView?.visibility = View.GONE
 
                     val decorView =
-                        window.decorView
-                            as ViewGroup
+                        window.decorView as ViewGroup
 
                     decorView.addView(
                         view,
@@ -589,7 +530,6 @@ class MainActivity : Activity() {
                 }
 
                 override fun onHideCustomView() {
-
                     exitFullscreen()
                 }
             }
@@ -602,8 +542,7 @@ class MainActivity : Activity() {
 
     private fun createWebView(): WebView {
 
-        val view =
-            WebView(this)
+        val view = WebView(this)
 
         configureWebView(view)
 
@@ -612,8 +551,7 @@ class MainActivity : Activity() {
 
     private fun createPopupWebView(): WebView {
 
-        val view =
-            WebView(this)
+        val view = WebView(this)
 
         configureWebView(view)
 
@@ -634,7 +572,6 @@ class MainActivity : Activity() {
             ) {
 
                 exitFullscreen()
-
                 return true
             }
 
@@ -699,14 +636,12 @@ class MainActivity : Activity() {
                     if (popupWebView != null) {
 
                         closePopupWebView()
-
                         return true
                     }
 
                     if (webView.canGoBack()) {
 
                         webView.goBack()
-
                         return true
                     }
                 }
@@ -725,16 +660,12 @@ class MainActivity : Activity() {
             ?.removeView(popup)
 
         popup.stopLoading()
-
         popup.loadUrl("about:blank")
-
         popup.destroy()
 
         popupWebView = null
 
-        webView.visibility =
-            View.VISIBLE
-
+        webView.visibility = View.VISIBLE
         webView.bringToFront()
     }
 
@@ -744,30 +675,23 @@ class MainActivity : Activity() {
             customView ?: return
 
         val decorView =
-            window.decorView
-                as ViewGroup
+            window.decorView as ViewGroup
 
         decorView.removeView(view)
 
         customView = null
 
-        customViewCallback
-            ?.onCustomViewHidden()
-
+        customViewCallback?.onCustomViewHidden()
         customViewCallback = null
 
         if (popupWebView != null) {
 
-            popupWebView?.visibility =
-                View.VISIBLE
-
+            popupWebView?.visibility = View.VISIBLE
             popupWebView?.bringToFront()
 
         } else {
 
-            webView.visibility =
-                View.VISIBLE
-
+            webView.visibility = View.VISIBLE
             webView.bringToFront()
         }
 
@@ -783,6 +707,31 @@ class MainActivity : Activity() {
     override fun onDestroy() {
 
         customView?.let {
-
             (window.decorView as ViewGroup)
-                .remov
+                .removeView(it)
+        }
+
+        popupWebView?.let { popup ->
+
+            (popup.parent as? ViewGroup)
+                ?.removeView(popup)
+
+            popup.stopLoading()
+            popup.loadUrl("about:blank")
+            popup.destroy()
+        }
+
+        popupWebView = null
+
+        webView.stopLoading()
+        webView.loadUrl("about:blank")
+        webView.clearHistory()
+
+        (webView.parent as? ViewGroup)
+            ?.removeView(webView)
+
+        webView.destroy()
+
+        super.onDestroy()
+    }
+}
