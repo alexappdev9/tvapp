@@ -88,8 +88,10 @@ class MainActivity : Activity() {
 
                 var r = current.getBoundingClientRect();
 
-                if (r.top < 0 || r.bottom > window.innerHeight ||
-                    r.left < 0 || r.right > window.innerWidth) {
+                if (r.top < 0 ||
+                    r.bottom > window.innerHeight ||
+                    r.left < 0 ||
+                    r.right > window.innerWidth) {
 
                     current.scrollIntoView({
                         behavior: 'auto',
@@ -267,15 +269,8 @@ class MainActivity : Activity() {
 
             mixedContentMode =
                 WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-
-            userAgentString =
-                WebSettings().userAgentString +
-                " CineTV-AndroidTV"
         }
 
-        /*
-         * Cookies are important for many web video players.
-         */
         CookieManager.getInstance().setAcceptCookie(true)
 
         CookieManager.getInstance()
@@ -300,7 +295,6 @@ class MainActivity : Activity() {
                     view: WebView,
                     request: WebResourceRequest
                 ): Boolean {
-
                     return false
                 }
             }
@@ -347,7 +341,6 @@ class MainActivity : Activity() {
                 override fun onConsoleMessage(
                     consoleMessage: android.webkit.ConsoleMessage
                 ): Boolean {
-
                     return true
                 }
             }
@@ -373,12 +366,10 @@ class MainActivity : Activity() {
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
 
                     if (customView == null) {
-
                         webView.evaluateJavascript(
                             "window.__cineTvMove(-1,0);",
                             null
                         )
-
                         return true
                     }
                 }
@@ -386,12 +377,10 @@ class MainActivity : Activity() {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
 
                     if (customView == null) {
-
                         webView.evaluateJavascript(
                             "window.__cineTvMove(1,0);",
                             null
                         )
-
                         return true
                     }
                 }
@@ -399,12 +388,10 @@ class MainActivity : Activity() {
                 KeyEvent.KEYCODE_DPAD_UP -> {
 
                     if (customView == null) {
-
                         webView.evaluateJavascript(
                             "window.__cineTvMove(0,-1);",
                             null
                         )
-
                         return true
                     }
                 }
@@ -412,12 +399,10 @@ class MainActivity : Activity() {
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
 
                     if (customView == null) {
-
                         webView.evaluateJavascript(
                             "window.__cineTvMove(0,1);",
                             null
                         )
-
                         return true
                     }
                 }
@@ -426,12 +411,10 @@ class MainActivity : Activity() {
                 KeyEvent.KEYCODE_ENTER -> {
 
                     if (customView == null) {
-
                         webView.evaluateJavascript(
                             "window.__cineTvSelect();",
                             null
                         )
-
                         return true
                     }
                 }
@@ -439,13 +422,11 @@ class MainActivity : Activity() {
                 KeyEvent.KEYCODE_BACK -> {
 
                     if (customView != null) {
-
                         exitFullscreen()
                         return true
                     }
 
                     if (webView.canGoBack()) {
-
                         webView.goBack()
                         return true
                     }
@@ -469,7 +450,6 @@ class MainActivity : Activity() {
         customView = null
 
         customViewCallback?.onCustomViewHidden()
-
         customViewCallback = null
 
         webView.visibility = View.VISIBLE
