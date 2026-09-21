@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Message
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -18,6 +19,8 @@ class MainActivity : Activity() {
 
     private lateinit var webView: WebView
 
+    private var popupWebView: WebView? = null
+
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
@@ -30,6 +33,7 @@ class MainActivity : Activity() {
 
             var style = document.createElement('style');
             style.id = 'cine-tv-focus-style';
+
             style.textContent = `
                 *:focus {
                     outline: none !important;
@@ -48,6 +52,7 @@ class MainActivity : Activity() {
                     user-select: none !important;
                 }
             `;
+
             document.head.appendChild(style);
 
             function candidates() {
@@ -56,6 +61,7 @@ class MainActivity : Activity() {
                         'a[href], button, input, select, textarea, [role="button"]'
                     )
                 ).filter(function(el) {
+
                     var r = el.getBoundingClientRect();
                     var s = getComputedStyle(el);
 
@@ -69,6 +75,7 @@ class MainActivity : Activity() {
             }
 
             function focusElement(el) {
+
                 if (!el) return;
 
                 if (current && current !== el) {
@@ -76,6 +83,7 @@ class MainActivity : Activity() {
                 }
 
                 current = el;
+
                 current.classList.add('cine-tv-focused');
 
                 try {
@@ -102,6 +110,7 @@ class MainActivity : Activity() {
             }
 
             function start() {
+
                 var list = candidates();
 
                 if (!list.length) return;
@@ -109,6 +118,7 @@ class MainActivity : Activity() {
                 if (!current || !list.includes(current)) {
 
                     var first = list.find(function(el) {
+
                         var r = el.getBoundingClientRect();
 
                         return r.bottom > 0 &&
@@ -120,6 +130,7 @@ class MainActivity : Activity() {
             }
 
             function move(dx, dy) {
+
                 var list = candidates();
 
                 if (!list.length) return;
@@ -167,7 +178,7 @@ class MainActivity : Activity() {
                         : Math.abs(vx);
 
                     var score =
-                        primary * 1.0 +
+                        primary +
                         secondary * 1.8;
 
                     if (score < bestScore) {
@@ -182,6 +193,7 @@ class MainActivity : Activity() {
             }
 
             function activate() {
+
                 if (!current) {
                     start();
                     return;
@@ -190,6 +202,7 @@ class MainActivity : Activity() {
                 try {
                     current.click();
                 } catch (e) {
+
                     try {
                         current.dispatchEvent(
                             new MouseEvent('click', {
@@ -221,7 +234,9 @@ class MainActivity : Activity() {
             new MutationObserver(function() {
 
                 if (!current || !document.contains(current)) {
+
                     current = null;
+
                     setTimeout(start, 100);
                 }
 
@@ -239,14 +254,23 @@ class MainActivity : Activity() {
         requestedOrientation =
             ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
-        webView = WebView(this)
+        webView = createWebView()
 
-        webView.setBackgroundColor(Color.BLACK)
+        setContentView(webView)
 
-        webView.isFocusable = true
-        webView.isFocusableInTouchMode = true
+        webView.loadUrl("https://cine.su/en")
+    }
 
-        webView.settings.apply {
+    private fun createWebView(): WebView {
+
+        val view = WebView(this)
+
+        view.setBackgroundColor(Color.BLACK)
+
+        view.isFocusable = true
+        view.isFocusableInTouchMode = true
+
+        view.settings.apply {
 
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -257,8 +281,13 @@ class MainActivity : Activity() {
             displayZoomControls = false
             setSupportZoom(false)
 
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false)
+            javaScriptCanOpenWindowsAutomatically = true
+
+            /*
+             * IMPORTANT:
+             * Cine's player may request another browser window.
+             */
+            setSupportMultipleWindows(true)
 
             databaseEnabled = true
 
@@ -271,12 +300,13 @@ class MainActivity : Activity() {
                 WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         }
 
-        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance()
+            .setAcceptCookie(true)
 
         CookieManager.getInstance()
-            .setAcceptThirdPartyCookies(webView, true)
+            .setAcceptThirdPartyCookies(view, true)
 
-        webView.webViewClient =
+        view.webViewClient =
             object : WebViewClient() {
 
                 override fun onPageFinished(
@@ -295,12 +325,61 @@ class MainActivity : Activity() {
                     view: WebView,
                     request: WebResourceRequest
                 ): Boolean {
+
                     return false
                 }
             }
 
-        webView.webChromeClient =
+        view.webChromeClient =
             object : WebChromeClient() {
+
+                /*
+                 * Handle JavaScript / target="_blank" windows.
+                 *
+                 * Instead of allowing Android to discard the request,
+                 * we create another WebView and put it on top of the
+                 * existing one.
+                 */
+                override fun onCreateWindow(
+                    view: WebView,
+                    isDialog: Boolean,
+                    isUserGesture: Boolean,
+                    resultMsg: Message
+                ): Boolean {
+
+                    val newWebView = createPopupWebView()
+
+                    popupWebView = newWebView
+
+                    val decorView =
+                        window.decorView as ViewGroup
+
+                    decorView.addView(
+                        newWebView,
+                        ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    )
+
+                    newWebView.bringToFront()
+
+                    val transport =
+                        resultMsg.obj as WebView.WebViewTransport
+
+                    transport.webView = newWebView
+
+                    resultMsg.sendToTarget()
+
+                    return true
+                }
+
+                override fun onCloseWindow(
+                    window: WebView
+                ) {
+
+                    closePopupWebView()
+                }
 
                 override fun onShowCustomView(
                     view: View,
@@ -308,7 +387,9 @@ class MainActivity : Activity() {
                 ) {
 
                     if (customView != null) {
+
                         callback.onCustomViewHidden()
+
                         return
                     }
 
@@ -316,6 +397,8 @@ class MainActivity : Activity() {
                     customViewCallback = callback
 
                     webView.visibility = View.GONE
+
+                    popupWebView?.visibility = View.GONE
 
                     val decorView =
                         window.decorView as ViewGroup
@@ -335,24 +418,149 @@ class MainActivity : Activity() {
                 }
 
                 override fun onHideCustomView() {
+
                     exitFullscreen()
                 }
 
                 override fun onConsoleMessage(
                     consoleMessage: android.webkit.ConsoleMessage
                 ): Boolean {
+
                     return true
                 }
             }
 
-        webView.systemUiVisibility =
+        view.systemUiVisibility =
             View.SYSTEM_UI_FLAG_FULLSCREEN or
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
 
-        setContentView(webView)
+        return view
+    }
 
-        webView.loadUrl("https://cine.su/en")
+    private fun createPopupWebView(): WebView {
+
+        val view = WebView(this)
+
+        view.setBackgroundColor(Color.BLACK)
+
+        view.isFocusable = true
+        view.isFocusableInTouchMode = true
+
+        view.settings.apply {
+
+            javaScriptEnabled = true
+            domStorageEnabled = true
+
+            mediaPlaybackRequiresUserGesture = false
+
+            builtInZoomControls = false
+            displayZoomControls = false
+            setSupportZoom(false)
+
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(false)
+
+            databaseEnabled = true
+
+            cacheMode = WebSettings.LOAD_DEFAULT
+
+            allowFileAccess = false
+            allowContentAccess = false
+
+            mixedContentMode =
+                WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        }
+
+        CookieManager.getInstance()
+            .setAcceptCookie(true)
+
+        CookieManager.getInstance()
+            .setAcceptThirdPartyCookies(view, true)
+
+        view.webViewClient =
+            object : WebViewClient() {
+
+                override fun onPageFinished(
+                    view: WebView,
+                    url: String
+                ) {
+
+                    super.onPageFinished(view, url)
+
+                    view.evaluateJavascript(
+                        tvNavigationScript,
+                        null
+                    )
+                }
+
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): Boolean {
+
+                    return false
+                }
+            }
+
+        view.webChromeClient =
+            object : WebChromeClient() {
+
+                override fun onShowCustomView(
+                    view: View,
+                    callback: CustomViewCallback
+                ) {
+
+                    if (customView != null) {
+
+                        callback.onCustomViewHidden()
+
+                        return
+                    }
+
+                    customView = view
+                    customViewCallback = callback
+
+                    webView.visibility = View.GONE
+
+                    popupWebView?.visibility = View.GONE
+
+                    val decorView =
+                        window.decorView as ViewGroup
+
+                    decorView.addView(
+                        view,
+                        ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    )
+
+                    window.decorView.systemUiVisibility =
+                        View.SYSTEM_UI_FLAG_FULLSCREEN or
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                }
+
+                override fun onHideCustomView() {
+
+                    exitFullscreen()
+                }
+
+                override fun onCloseWindow(
+                    window: WebView
+                ) {
+
+                    closePopupWebView()
+                }
+            }
+
+        view.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+
+        return view
     }
 
     override fun dispatchKeyEvent(
@@ -361,73 +569,92 @@ class MainActivity : Activity() {
 
         if (event.action == KeyEvent.ACTION_DOWN) {
 
+            /*
+             * If a fullscreen video is active,
+             * let BACK exit fullscreen.
+             */
+            if (event.keyCode == KeyEvent.KEYCODE_BACK &&
+                customView != null
+            ) {
+
+                exitFullscreen()
+
+                return true
+            }
+
+            /*
+             * If a popup/player WebView exists,
+             * D-pad navigation is handled by that WebView's page.
+             */
+            val activeWebView =
+                popupWebView ?: webView
+
             when (event.keyCode) {
 
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
 
-                    if (customView == null) {
-                        webView.evaluateJavascript(
-                            "window.__cineTvMove(-1,0);",
-                            null
-                        )
-                        return true
-                    }
+                    activeWebView.evaluateJavascript(
+                        "window.__cineTvMove(-1,0);",
+                        null
+                    )
+
+                    return true
                 }
 
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
 
-                    if (customView == null) {
-                        webView.evaluateJavascript(
-                            "window.__cineTvMove(1,0);",
-                            null
-                        )
-                        return true
-                    }
+                    activeWebView.evaluateJavascript(
+                        "window.__cineTvMove(1,0);",
+                        null
+                    )
+
+                    return true
                 }
 
                 KeyEvent.KEYCODE_DPAD_UP -> {
 
-                    if (customView == null) {
-                        webView.evaluateJavascript(
-                            "window.__cineTvMove(0,-1);",
-                            null
-                        )
-                        return true
-                    }
+                    activeWebView.evaluateJavascript(
+                        "window.__cineTvMove(0,-1);",
+                        null
+                    )
+
+                    return true
                 }
 
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
 
-                    if (customView == null) {
-                        webView.evaluateJavascript(
-                            "window.__cineTvMove(0,1);",
-                            null
-                        )
-                        return true
-                    }
+                    activeWebView.evaluateJavascript(
+                        "window.__cineTvMove(0,1);",
+                        null
+                    )
+
+                    return true
                 }
 
                 KeyEvent.KEYCODE_DPAD_CENTER,
                 KeyEvent.KEYCODE_ENTER -> {
 
-                    if (customView == null) {
-                        webView.evaluateJavascript(
-                            "window.__cineTvSelect();",
-                            null
-                        )
-                        return true
-                    }
+                    activeWebView.evaluateJavascript(
+                        "window.__cineTvSelect();",
+                        null
+                    )
+
+                    return true
                 }
 
                 KeyEvent.KEYCODE_BACK -> {
 
-                    if (customView != null) {
-                        exitFullscreen()
+                    if (popupWebView != null) {
+
+                        closePopupWebView()
+
                         return true
                     }
 
                     if (webView.canGoBack()) {
+
                         webView.goBack()
+
                         return true
                     }
                 }
@@ -435,6 +662,27 @@ class MainActivity : Activity() {
         }
 
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun closePopupWebView() {
+
+        val popup =
+            popupWebView ?: return
+
+        (popup.parent as? ViewGroup)
+            ?.removeView(popup)
+
+        popup.stopLoading()
+
+        popup.loadUrl("about:blank")
+
+        popup.destroy()
+
+        popupWebView = null
+
+        webView.visibility = View.VISIBLE
+
+        webView.bringToFront()
     }
 
     private fun exitFullscreen() {
@@ -450,11 +698,18 @@ class MainActivity : Activity() {
         customView = null
 
         customViewCallback?.onCustomViewHidden()
+
         customViewCallback = null
 
-        webView.visibility = View.VISIBLE
+        if (popupWebView != null) {
+            popupWebView?.visibility = View.VISIBLE
+            popupWebView?.bringToFront()
+        } else {
+            webView.visibility = View.VISIBLE
+            webView.bringToFront()
+        }
 
-        webView.systemUiVisibility =
+        window.decorView.systemUiVisibility =
             View.SYSTEM_UI_FLAG_FULLSCREEN or
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -466,9 +721,22 @@ class MainActivity : Activity() {
     override fun onDestroy() {
 
         customView?.let {
+
             (window.decorView as ViewGroup)
                 .removeView(it)
         }
+
+        popupWebView?.let {
+
+            (it.parent as? ViewGroup)
+                ?.removeView(it)
+
+            it.stopLoading()
+            it.loadUrl("about:blank")
+            it.destroy()
+        }
+
+        popupWebView = null
 
         webView.stopLoading()
 
