@@ -12,7 +12,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.FrameLayout
 import java.io.ByteArrayInputStream
 
 class MainActivity : Activity() {
@@ -21,17 +20,6 @@ class MainActivity : Activity() {
 
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
-
-    private val blockedHosts = setOf(
-        "doubleclick.net",
-        "googlesyndication.com",
-        "googleadservices.com",
-        "adservice.google.com",
-        "popads.net",
-        "popcash.net",
-        "propellerads.com",
-        "adsterra.com"
-    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,9 +43,12 @@ class MainActivity : Activity() {
 
             allowFileAccess = false
             allowContentAccess = false
-
             setSupportMultipleWindows(false)
         }
+
+        webView.isFocusable = true
+        webView.isFocusableInTouchMode = true
+        webView.requestFocus()
 
         webView.webViewClient = object : WebViewClient() {
 
@@ -65,19 +56,6 @@ class MainActivity : Activity() {
                 view: WebView,
                 request: WebResourceRequest
             ): WebResourceResponse? {
-
-                val host = request.url.host?.lowercase() ?: ""
-
-                if (blockedHosts.any {
-                        host == it || host.endsWith(".$it")
-                    }) {
-                    return WebResourceResponse(
-                        "text/plain",
-                        "UTF-8",
-                        ByteArrayInputStream(ByteArray(0))
-                    )
-                }
-
                 return null
             }
 
@@ -119,9 +97,6 @@ class MainActivity : Activity() {
                     View.SYSTEM_UI_FLAG_FULLSCREEN or
                     View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-
-                requestedOrientation =
-                    ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             }
 
             override fun onHideCustomView() {
@@ -139,7 +114,51 @@ class MainActivity : Activity() {
         webView.loadUrl("https://cine.su/en")
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+
+        if (event.action == KeyEvent.ACTION_DOWN) {
+
+            when (event.keyCode) {
+
+                KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_ENTER -> {
+
+                    if (customView == null) {
+                        webView.evaluateJavascript(
+                            """
+                            (function() {
+                                var el = document.activeElement;
+                                if (el) {
+                                    el.click();
+                                    return true;
+                                }
+                                return false;
+                            })();
+                            """.trimIndent(),
+                            null
+                        )
+
+                        return true
+                    }
+                }
+
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+
+                    if (customView == null) {
+                        webView.requestFocus()
+                    }
+                }
+            }
+        }
+
+        return super.dispatchKeyEvent(event)
+    }
+
     private fun exitFullscreen() {
+
         val view = customView ?: return
 
         val decorView = window.decorView as ViewGroup
@@ -152,6 +171,7 @@ class MainActivity : Activity() {
         customViewCallback = null
 
         webView.visibility = View.VISIBLE
+        webView.requestFocus()
 
         window.decorView.systemUiVisibility =
             View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -162,7 +182,10 @@ class MainActivity : Activity() {
             ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+    override fun onKeyDown(
+        keyCode: Int,
+        event: KeyEvent
+    ): Boolean {
 
         if (keyCode == KeyEvent.KEYCODE_BACK) {
 
