@@ -5,52 +5,74 @@ import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Message
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.FrameLayout
-import android.widget.TextView
-import java.util.ArrayDeque
+import java.io.ByteArrayInputStream
+import java.net.URI
 
 class MainActivity : Activity() {
 
     private lateinit var webView: WebView
+
     private var popupWebView: WebView? = null
 
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
-    private lateinit var rootLayout: FrameLayout
-    private lateinit var diagnosticView: TextView
+    private val blockedAdHosts = setOf(
+        "doubleclick.net",
+        "googlesyndication.com",
+        "googleadservices.com",
+        "googletagservices.com",
+        "adservice.google.com",
+        "adnxs.com",
+        "adsrvr.org",
+        "adform.net",
+        "advertising.com",
+        "pubmatic.com",
+        "rubiconproject.com",
+        "openx.net",
+        "criteo.com",
+        "outbrain.com",
+        "taboola.com",
+        "popads.net",
+        "popcash.net",
+        "propellerads.com",
+        "exoclick.com",
+        "trafficjunky.net",
+        "juicyads.com",
+        "onclickads.net"
+    )
 
-    private val diagnostics = ArrayDeque<String>()
-
-    /*
-     * ============================================================
-     * TEMPORARY DIAGNOSTIC BUILD
-     * ============================================================
-     *
-     * IMPORTANT:
-     * The previous ad blocker is DISABLED in this version.
-     *
-     * We need to determine whether the third-party video player
-     * works when our request filtering is completely out of the way.
-     */
+    private val blockedAdPatterns = listOf(
+        "/ads/",
+        "/adserver/",
+        "/advert/",
+        "/advertising/",
+        "/banner/",
+        "/popunder/",
+        "/popup/",
+        "/prebid/",
+        "doubleclick",
+        "googlesyndication",
+        "googleadservices",
+        "adservice",
+        "popunder",
+        "popads",
+        "popcash"
+    )
 
     private val tvNavigationScript = """
         (function() {
-
             if (window.__cineTvNavInstalled) return;
-
             window.__cineTvNavInstalled = true;
 
             var current = null;
@@ -81,7 +103,6 @@ class MainActivity : Activity() {
             document.head.appendChild(style);
 
             function candidates() {
-
                 return Array.from(
                     document.querySelectorAll(
                         'a[href], button, input, select, textarea, [role="button"]'
@@ -113,17 +134,13 @@ class MainActivity : Activity() {
                 current.classList.add('cine-tv-focused');
 
                 try {
-
                     current.focus({
                         preventScroll: true
                     });
-
                 } catch (e) {
-
                     try {
                         current.focus();
                     } catch (ignore) {}
-
                 }
 
                 var r = current.getBoundingClientRect();
@@ -168,7 +185,6 @@ class MainActivity : Activity() {
                 if (!list.length) return;
 
                 if (!current || !list.includes(current)) {
-
                     start();
                     return;
                 }
@@ -199,7 +215,6 @@ class MainActivity : Activity() {
                         (dx < 0 && vx >= -5) ||
                         (dy > 0 && vy <= 5) ||
                         (dy < 0 && vy >= -5)) {
-
                         return;
                     }
 
@@ -216,7 +231,6 @@ class MainActivity : Activity() {
                         secondary * 1.8;
 
                     if (score < bestScore) {
-
                         bestScore = score;
                         best = el;
                     }
@@ -230,19 +244,14 @@ class MainActivity : Activity() {
             function activate() {
 
                 if (!current) {
-
                     start();
                     return;
                 }
 
                 try {
-
                     current.click();
-
                 } catch (e) {
-
                     try {
-
                         current.dispatchEvent(
                             new MouseEvent(
                                 'click',
@@ -253,7 +262,6 @@ class MainActivity : Activity() {
                                 }
                             )
                         );
-
                     } catch (ignore) {}
                 }
             }
@@ -283,95 +291,77 @@ class MainActivity : Activity() {
                     setTimeout(start, 100);
                 }
 
-            }).observe(
-                document.documentElement,
-                {
-                    childList: true,
-                    subtree: true
-                }
-            );
+            }).observe(document.documentElement, {
+                childList: true,
+                subtree: true
+            });
 
         })();
     """.trimIndent()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-
         super.onCreate(savedInstanceState)
 
         requestedOrientation =
             ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
-        rootLayout = FrameLayout(this)
-
         webView = createWebView()
 
-        rootLayout.addView(
-            webView,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-
-        diagnosticView = TextView(this)
-
-        diagnosticView.setTextColor(Color.WHITE)
-        diagnosticView.setBackgroundColor(0xCC000000.toInt())
-        diagnosticView.textSize = 12f
-
-        diagnosticView.setPadding(
-            20,
-            12,
-            20,
-            12
-        )
-
-        diagnosticView.gravity =
-            Gravity.CENTER_VERTICAL
-
-        val diagnosticParams =
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            )
-
-        diagnosticParams.gravity =
-            Gravity.TOP
-
-        rootLayout.addView(
-            diagnosticView,
-            diagnosticParams
-        )
-
-        setContentView(rootLayout)
-
-        addDiagnostic("CineTV diagnostic build")
-        addDiagnostic("Ad blocking: OFF")
+        setContentView(webView)
 
         webView.loadUrl("https://cine.su/en")
     }
 
-    private fun addDiagnostic(message: String) {
+    private fun isAdRequest(urlString: String): Boolean {
 
-        val cleanMessage =
-            message
-                .replace("\n", " ")
-                .take(240)
+        val url = urlString.lowercase()
 
-        diagnostics.addLast(cleanMessage)
-
-        while (diagnostics.size > 5) {
-            diagnostics.removeFirst()
+        if (url.contains(".mp4") ||
+            url.contains(".m3u8") ||
+            url.contains(".mpd") ||
+            url.contains(".webm") ||
+            url.contains(".mkv") ||
+            url.contains(".m4v") ||
+            url.contains(".ts")
+        ) {
+            return false
         }
 
-        val displayText =
-            diagnostics.joinToString("\n")
-
-        runOnUiThread {
-
-            diagnosticView.text =
-                displayText
+        val host = try {
+            URI(url).host?.lowercase() ?: ""
+        } catch (e: Exception) {
+            ""
         }
+
+        for (blockedHost in blockedAdHosts) {
+
+            if (host == blockedHost ||
+                host.endsWith("." + blockedHost)
+            ) {
+                return true
+            }
+        }
+
+        for (pattern in blockedAdPatterns) {
+
+            if (url.contains(pattern)) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private fun emptyResponse(): WebResourceResponse {
+
+        return WebResourceResponse(
+            "text/plain",
+            "UTF-8",
+            204,
+            "No Content",
+            emptyMap(),
+            ByteArrayInputStream(ByteArray(0))
+        )
     }
 
     private fun configureWebView(view: WebView) {
@@ -379,4 +369,369 @@ class MainActivity : Activity() {
         view.setBackgroundColor(Color.BLACK)
 
         view.isFocusable = true
-        view.isFocusableInTouchMode =
+        view.isFocusableInTouchMode = true
+
+        view.settings.apply {
+
+            javaScriptEnabled = true
+            domStorageEnabled = true
+
+            mediaPlaybackRequiresUserGesture = false
+
+            builtInZoomControls = false
+            displayZoomControls = false
+            setSupportZoom(false)
+
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(true)
+
+            databaseEnabled = true
+
+            cacheMode = WebSettings.LOAD_DEFAULT
+
+            allowFileAccess = false
+            allowContentAccess = false
+
+            mixedContentMode =
+                WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        }
+
+        CookieManager.getInstance()
+            .setAcceptCookie(true)
+
+        CookieManager.getInstance()
+            .setAcceptThirdPartyCookies(
+                view,
+                true
+            )
+
+        view.webViewClient =
+            object : WebViewClient() {
+
+                override fun onPageFinished(
+                    view: WebView,
+                    url: String
+                ) {
+
+                    super.onPageFinished(view, url)
+
+                    view.evaluateJavascript(
+                        tvNavigationScript,
+                        null
+                    )
+                }
+
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): WebResourceResponse? {
+
+                    val url =
+                        request.url.toString()
+
+                    if (isAdRequest(url)) {
+                        return emptyResponse()
+                    }
+
+                    return super.shouldInterceptRequest(
+                        view,
+                        request
+                    )
+                }
+
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): Boolean {
+
+                    return false
+                }
+            }
+
+        view.webChromeClient =
+            object : WebChromeClient() {
+
+                override fun onCreateWindow(
+                    view: WebView,
+                    isDialog: Boolean,
+                    isUserGesture: Boolean,
+                    resultMsg: Message
+                ): Boolean {
+
+                    val newWebView =
+                        createPopupWebView()
+
+                    popupWebView =
+                        newWebView
+
+                    val decorView =
+                        window.decorView as ViewGroup
+
+                    decorView.addView(
+                        newWebView,
+                        ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    )
+
+                    newWebView.bringToFront()
+
+                    val transport =
+                        resultMsg.obj as WebView.WebViewTransport
+
+                    transport.webView =
+                        newWebView
+
+                    resultMsg.sendToTarget()
+
+                    return true
+                }
+
+                override fun onCloseWindow(
+                    window: WebView
+                ) {
+
+                    closePopupWebView()
+                }
+
+                override fun onShowCustomView(
+                    view: View,
+                    callback: CustomViewCallback
+                ) {
+
+                    if (customView != null) {
+
+                        callback.onCustomViewHidden()
+                        return
+                    }
+
+                    customView = view
+                    customViewCallback = callback
+
+                    webView.visibility = View.GONE
+                    popupWebView?.visibility = View.GONE
+
+                    val decorView =
+                        window.decorView as ViewGroup
+
+                    decorView.addView(
+                        view,
+                        ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    )
+
+                    window.decorView.systemUiVisibility =
+                        View.SYSTEM_UI_FLAG_FULLSCREEN or
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                }
+
+                override fun onHideCustomView() {
+                    exitFullscreen()
+                }
+            }
+
+        view.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+    }
+
+    private fun createWebView(): WebView {
+
+        val view = WebView(this)
+
+        configureWebView(view)
+
+        return view
+    }
+
+    private fun createPopupWebView(): WebView {
+
+        val view = WebView(this)
+
+        configureWebView(view)
+
+        return view
+    }
+
+    override fun dispatchKeyEvent(
+        event: KeyEvent
+    ): Boolean {
+
+        if (event.action ==
+            KeyEvent.ACTION_DOWN
+        ) {
+
+            if (event.keyCode ==
+                KeyEvent.KEYCODE_BACK &&
+                customView != null
+            ) {
+
+                exitFullscreen()
+                return true
+            }
+
+            val activeWebView =
+                popupWebView ?: webView
+
+            when (event.keyCode) {
+
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+
+                    activeWebView.evaluateJavascript(
+                        "window.__cineTvMove(-1,0);",
+                        null
+                    )
+
+                    return true
+                }
+
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+
+                    activeWebView.evaluateJavascript(
+                        "window.__cineTvMove(1,0);",
+                        null
+                    )
+
+                    return true
+                }
+
+                KeyEvent.KEYCODE_DPAD_UP -> {
+
+                    activeWebView.evaluateJavascript(
+                        "window.__cineTvMove(0,-1);",
+                        null
+                    )
+
+                    return true
+                }
+
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+
+                    activeWebView.evaluateJavascript(
+                        "window.__cineTvMove(0,1);",
+                        null
+                    )
+
+                    return true
+                }
+
+                KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_ENTER -> {
+
+                    activeWebView.evaluateJavascript(
+                        "window.__cineTvSelect();",
+                        null
+                    )
+
+                    return true
+                }
+
+                KeyEvent.KEYCODE_BACK -> {
+
+                    if (popupWebView != null) {
+
+                        closePopupWebView()
+                        return true
+                    }
+
+                    if (webView.canGoBack()) {
+
+                        webView.goBack()
+                        return true
+                    }
+                }
+            }
+        }
+
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun closePopupWebView() {
+
+        val popup =
+            popupWebView ?: return
+
+        (popup.parent as? ViewGroup)
+            ?.removeView(popup)
+
+        popup.stopLoading()
+        popup.loadUrl("about:blank")
+        popup.destroy()
+
+        popupWebView = null
+
+        webView.visibility = View.VISIBLE
+        webView.bringToFront()
+    }
+
+    private fun exitFullscreen() {
+
+        val view =
+            customView ?: return
+
+        val decorView =
+            window.decorView as ViewGroup
+
+        decorView.removeView(view)
+
+        customView = null
+
+        customViewCallback?.onCustomViewHidden()
+        customViewCallback = null
+
+        if (popupWebView != null) {
+
+            popupWebView?.visibility = View.VISIBLE
+            popupWebView?.bringToFront()
+
+        } else {
+
+            webView.visibility = View.VISIBLE
+            webView.bringToFront()
+        }
+
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+
+        requestedOrientation =
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+    }
+
+    override fun onDestroy() {
+
+        customView?.let {
+            (window.decorView as ViewGroup)
+                .removeView(it)
+        }
+
+        popupWebView?.let { popup ->
+
+            (popup.parent as? ViewGroup)
+                ?.removeView(popup)
+
+            popup.stopLoading()
+            popup.loadUrl("about:blank")
+            popup.destroy()
+        }
+
+        popupWebView = null
+
+        webView.stopLoading()
+        webView.loadUrl("about:blank")
+        webView.clearHistory()
+
+        (webView.parent as? ViewGroup)
+            ?.removeView(webView)
+
+        webView.destroy()
+
+        super.onDestroy()
+    }
+}
