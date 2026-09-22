@@ -375,6 +375,8 @@ class MainActivity : Activity() {
 
             javaScriptEnabled = true
             domStorageEnabled = true
+            setLoadWithOverviewMode(true)
+            setUseWideViewPort(true)
 
             mediaPlaybackRequiresUserGesture = false
 
