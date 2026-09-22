@@ -473,7 +473,23 @@ class MainActivity : Activity() {
                     )
 
                     newWebView.bringToFront()
+newWebView.webViewClient =
+    object : WebViewClient() {
 
+        override fun onPageStarted(
+            view: WebView,
+            url: String,
+            favicon: android.graphics.Bitmap?
+        ) {
+            android.widget.Toast.makeText(
+                this@MainActivity,
+                "POPUP: $url",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+
+            super.onPageStarted(view, url, favicon)
+        }
+    }
                     val transport =
                         resultMsg.obj as WebView.WebViewTransport
 
