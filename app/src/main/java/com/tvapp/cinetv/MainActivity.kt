@@ -423,18 +423,19 @@ class MainActivity : Activity() {
                     )
                 }
 
-                override fun shouldInterceptRequest(
+                                override fun shouldOverrideUrlLoading(
                     view: WebView,
                     request: WebResourceRequest
-                ): WebResourceResponse? {
+                ): Boolean {
 
-                    
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "URL: ${request.url}",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
 
-                    return super.shouldInterceptRequest(
-                        view,
-                        request
-                    )
-                }
+                    return false
+                                }
 
                 override fun shouldOverrideUrlLoading(
     view: WebView,
