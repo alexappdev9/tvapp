@@ -477,7 +477,6 @@ class MainActivity : Activity() {
 
     newWebView.bringToFront()
 
-    newWebView.settings.mediaPlaybackRequiresUserGesture = false
 
     val transport =
         resultMsg.obj as WebView.WebViewTransport
