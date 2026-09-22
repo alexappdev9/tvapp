@@ -437,11 +437,18 @@ class MainActivity : Activity() {
                 }
 
                 override fun shouldOverrideUrlLoading(
-                    view: WebView,
-                    request: WebResourceRequest
-                ): Boolean {
+    view: WebView,
+    request: WebResourceRequest
+): Boolean {
 
-                    return false
+    android.widget.Toast.makeText(
+        this@MainActivity,
+        "URL: ${request.url}",
+        android.widget.Toast.LENGTH_LONG
+    ).show()
+
+    return false
+}
                 }
             }
 
