@@ -426,12 +426,7 @@ class MainActivity : Activity() {
                     request: WebResourceRequest
                 ): WebResourceResponse? {
 
-                    val url =
-                        request.url.toString()
-
-                    if (isAdRequest(url)) {
-                        return emptyResponse()
-                    }
+                    
 
                     return super.shouldInterceptRequest(
                         view,
