@@ -5,70 +5,44 @@ import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Message
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import java.io.ByteArrayInputStream
-import java.net.URI
+import android.widget.FrameLayout
+import android.widget.TextView
+import java.util.ArrayDeque
 
 class MainActivity : Activity() {
 
     private lateinit var webView: WebView
-
     private var popupWebView: WebView? = null
 
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
-    private val blockedAdHosts = setOf(
-        "doubleclick.net",
-        "googlesyndication.com",
-        "googleadservices.com",
-        "googletagservices.com",
-        "adservice.google.com",
-        "adnxs.com",
-        "adsrvr.org",
-        "adform.net",
-        "advertising.com",
-        "pubmatic.com",
-        "rubiconproject.com",
-        "openx.net",
-        "criteo.com",
-        "outbrain.com",
-        "taboola.com",
-        "popads.net",
-        "popcash.net",
-        "propellerads.com",
-        "exoclick.com",
-        "trafficjunky.net",
-        "juicyads.com",
-        "onclickads.net"
-    )
+    private lateinit var rootLayout: FrameLayout
+    private lateinit var diagnosticView: TextView
 
-    private val blockedAdPatterns = listOf(
-        "/ads/",
-        "/adserver/",
-        "/advert/",
-        "/advertising/",
-        "/banner/",
-        "/popunder/",
-        "/popup/",
-        "/prebid/",
-        "doubleclick",
-        "googlesyndication",
-        "googleadservices",
-        "adservice",
-        "popunder",
-        "popads",
-        "popcash"
-    )
+    private val diagnostics = ArrayDeque<String>()
+
+    /*
+     * TEMPORARY DIAGNOSTIC BUILD
+     *
+     * IMPORTANT:
+     * The previous ad blocker is intentionally DISABLED here.
+     *
+     * We need to determine whether the third-party video player itself
+     * works before we reintroduce ad blocking.
+     */
 
     private val tvNavigationScript = """
         (function() {
@@ -305,63 +279,70 @@ class MainActivity : Activity() {
         requestedOrientation =
             ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
+        /*
+         * Root layout allows us to display temporary diagnostic information
+         * over the WebView.
+         */
+        rootLayout = FrameLayout(this)
+
         webView = createWebView()
 
-        setContentView(webView)
+        rootLayout.addView(
+            webView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        diagnosticView = TextView(this)
+
+        diagnosticView.setTextColor(Color.WHITE)
+        diagnosticView.setBackgroundColor(0xCC000000.toInt())
+        diagnosticView.textSize = 12f
+        diagnosticView.setPadding(20, 12, 20, 12)
+        diagnosticView.gravity = Gravity.CENTER_VERTICAL
+
+        val diagnosticParams =
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+
+        diagnosticParams.gravity = Gravity.TOP
+
+        rootLayout.addView(
+            diagnosticView,
+            diagnosticParams
+        )
+
+        setContentView(rootLayout)
+
+        addDiagnostic("App started")
+        addDiagnostic("Ad blocking TEMPORARILY disabled")
 
         webView.loadUrl("https://cine.su/en")
     }
 
-    private fun isAdRequest(urlString: String): Boolean {
+    private fun addDiagnostic(message: String) {
 
-        val url = urlString.lowercase()
+        val cleanMessage =
+            message
+                .replace("\n", " ")
+                .take(220)
 
-        if (url.contains(".mp4") ||
-            url.contains(".m3u8") ||
-            url.contains(".mpd") ||
-            url.contains(".webm") ||
-            url.contains(".mkv") ||
-            url.contains(".m4v") ||
-            url.contains(".ts")
-        ) {
-            return false
+        diagnostics.addLast(cleanMessage)
+
+        while (diagnostics.size > 5) {
+            diagnostics.removeFirst()
         }
 
-        val host = try {
-            URI(url).host?.lowercase() ?: ""
-        } catch (e: Exception) {
-            ""
+        val text =
+            diagnostics.joinToString("\n")
+
+        runOnUiThread {
+            diagnosticView.text = text
         }
-
-        for (blockedHost in blockedAdHosts) {
-
-            if (host == blockedHost ||
-                host.endsWith("." + blockedHost)
-            ) {
-                return true
-            }
-        }
-
-        for (pattern in blockedAdPatterns) {
-
-            if (url.contains(pattern)) {
-                return true
-            }
-        }
-
-        return false
-    }
-
-    private fun emptyResponse(): WebResourceResponse {
-
-        return WebResourceResponse(
-            "text/plain",
-            "UTF-8",
-            204,
-            "No Content",
-            emptyMap(),
-            ByteArrayInputStream(ByteArray(0))
-        )
     }
 
     private fun configureWebView(view: WebView) {
@@ -394,6 +375,13 @@ class MainActivity : Activity() {
 
             mixedContentMode =
                 WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+
+            /*
+             * These help third-party web players behave more like they
+             * would in a normal browser.
+             */
+            loadsImagesAutomatically = true
+            blockNetworkLoads = false
         }
 
         CookieManager.getInstance()
@@ -408,34 +396,40 @@ class MainActivity : Activity() {
         view.webViewClient =
             object : WebViewClient() {
 
+                override fun onPageStarted(
+                    view: WebView,
+                    url: String,
+                    favicon: android.graphics.Bitmap?
+                ) {
+
+                    super.onPageStarted(
+                        view,
+                        url,
+                        favicon
+                    )
+
+                    addDiagnostic(
+                        "PAGE START: $url"
+                    )
+                }
+
                 override fun onPageFinished(
                     view: WebView,
                     url: String
                 ) {
 
-                    super.onPageFinished(view, url)
+                    super.onPageFinished(
+                        view,
+                        url
+                    )
+
+                    addDiagnostic(
+                        "PAGE FINISHED: $url"
+                    )
 
                     view.evaluateJavascript(
                         tvNavigationScript,
                         null
-                    )
-                }
-
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest
-                ): WebResourceResponse? {
-
-                    val url =
-                        request.url.toString()
-
-                    if (isAdRequest(url)) {
-                        return emptyResponse()
-                    }
-
-                    return super.shouldInterceptRequest(
-                        view,
-                        request
                     )
                 }
 
@@ -444,12 +438,80 @@ class MainActivity : Activity() {
                     request: WebResourceRequest
                 ): Boolean {
 
+                    addDiagnostic(
+                        "NAV: ${request.url}"
+                    )
+
                     return false
+                }
+
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: WebResourceError
+                ) {
+
+                    super.onReceivedError(
+                        view,
+                        request,
+                        error
+                    )
+
+                    addDiagnostic(
+                        "ERROR ${error.errorCode}: ${error.description} | ${request.url}"
+                    )
+                }
+
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): android.webkit.WebResourceResponse? {
+
+                    /*
+                     * IMPORTANT:
+                     * We intentionally do NOT block anything in this
+                     * diagnostic build.
+                     *
+                     * Third-party video players can use unexpected
+                     * domains/URLs, and we need to see whether the player
+                     * works without our blocker interfering.
+                     */
+
+                    return super.shouldInterceptRequest(
+                        view,
+                        request
+                    )
                 }
             }
 
         view.webChromeClient =
             object : WebChromeClient() {
+
+                override fun onConsoleMessage(
+                    consoleMessage: ConsoleMessage
+                ): Boolean {
+
+                    addDiagnostic(
+                        "JS: ${consoleMessage.message()} @${consoleMessage.lineNumber()}"
+                    )
+
+                    return true
+                }
+
+                override fun onProgressChanged(
+                    view: WebView,
+                    newProgress: Int
+                ) {
+
+                    super.onProgressChanged(
+                        view,
+                        newProgress
+                    )
+
+                    if (newProgress == 100) {
+                        addDiagnostic("LOAD 100%")
+                    }
+                }
 
                 override fun onCreateWindow(
                     view: WebView,
@@ -457,6 +519,10 @@ class MainActivity : Activity() {
                     isUserGesture: Boolean,
                     resultMsg: Message
                 ): Boolean {
+
+                    addDiagnostic(
+                        "NEW WINDOW | userGesture=$isUserGesture"
+                    )
 
                     val newWebView =
                         createPopupWebView()
@@ -478,7 +544,8 @@ class MainActivity : Activity() {
                     newWebView.bringToFront()
 
                     val transport =
-                        resultMsg.obj as WebView.WebViewTransport
+                        resultMsg.obj
+                            as WebView.WebViewTransport
 
                     transport.webView =
                         newWebView
@@ -492,6 +559,10 @@ class MainActivity : Activity() {
                     window: WebView
                 ) {
 
+                    addDiagnostic(
+                        "WINDOW CLOSED"
+                    )
+
                     closePopupWebView()
                 }
 
@@ -499,6 +570,10 @@ class MainActivity : Activity() {
                     view: View,
                     callback: CustomViewCallback
                 ) {
+
+                    addDiagnostic(
+                        "FULLSCREEN PLAYER REQUESTED"
+                    )
 
                     if (customView != null) {
 
@@ -511,6 +586,7 @@ class MainActivity : Activity() {
 
                     webView.visibility = View.GONE
                     popupWebView?.visibility = View.GONE
+                    diagnosticView.visibility = View.GONE
 
                     val decorView =
                         window.decorView as ViewGroup
@@ -530,6 +606,11 @@ class MainActivity : Activity() {
                 }
 
                 override fun onHideCustomView() {
+
+                    addDiagnostic(
+                        "FULLSCREEN PLAYER CLOSED"
+                    )
+
                     exitFullscreen()
                 }
             }
@@ -542,7 +623,8 @@ class MainActivity : Activity() {
 
     private fun createWebView(): WebView {
 
-        val view = WebView(this)
+        val view =
+            WebView(this)
 
         configureWebView(view)
 
@@ -551,7 +633,8 @@ class MainActivity : Activity() {
 
     private fun createPopupWebView(): WebView {
 
-        val view = WebView(this)
+        val view =
+            WebView(this)
 
         configureWebView(view)
 
@@ -623,6 +706,10 @@ class MainActivity : Activity() {
                 KeyEvent.KEYCODE_DPAD_CENTER,
                 KeyEvent.KEYCODE_ENTER -> {
 
+                    addDiagnostic(
+                        "REMOTE OK PRESSED"
+                    )
+
                     activeWebView.evaluateJavascript(
                         "window.__cineTvSelect();",
                         null
@@ -636,102 +723,4 @@ class MainActivity : Activity() {
                     if (popupWebView != null) {
 
                         closePopupWebView()
-                        return true
-                    }
-
-                    if (webView.canGoBack()) {
-
-                        webView.goBack()
-                        return true
-                    }
-                }
-            }
-        }
-
-        return super.dispatchKeyEvent(event)
-    }
-
-    private fun closePopupWebView() {
-
-        val popup =
-            popupWebView ?: return
-
-        (popup.parent as? ViewGroup)
-            ?.removeView(popup)
-
-        popup.stopLoading()
-        popup.loadUrl("about:blank")
-        popup.destroy()
-
-        popupWebView = null
-
-        webView.visibility = View.VISIBLE
-        webView.bringToFront()
-    }
-
-    private fun exitFullscreen() {
-
-        val view =
-            customView ?: return
-
-        val decorView =
-            window.decorView as ViewGroup
-
-        decorView.removeView(view)
-
-        customView = null
-
-        customViewCallback?.onCustomViewHidden()
-        customViewCallback = null
-
-        if (popupWebView != null) {
-
-            popupWebView?.visibility = View.VISIBLE
-            popupWebView?.bringToFront()
-
-        } else {
-
-            webView.visibility = View.VISIBLE
-            webView.bringToFront()
-        }
-
-        window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-
-        requestedOrientation =
-            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-    }
-
-    override fun onDestroy() {
-
-        customView?.let {
-            (window.decorView as ViewGroup)
-                .removeView(it)
-        }
-
-        popupWebView?.let { popup ->
-
-            (popup.parent as? ViewGroup)
-                ?.removeView(popup)
-
-            popup.stopLoading()
-            popup.loadUrl("about:blank")
-            popup.destroy()
-        }
-
-        popupWebView = null
-
-        webView.stopLoading()
-        webView.loadUrl("about:blank")
-        webView.clearHistory()
-
-        (webView.parent as? ViewGroup)
-            ?.removeView(webView)
-
-        webView.destroy()
-
-        super.onDestroy()
-    }
-}
+                  
