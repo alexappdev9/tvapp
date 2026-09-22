@@ -452,40 +452,43 @@ class MainActivity : Activity() {
             object : WebChromeClient() {
 
                 override fun onCreateWindow(
-                    view: WebView,
-                    isDialog: Boolean,
-                    isUserGesture: Boolean,
-                    resultMsg: Message
-                ): Boolean {
+    view: WebView,
+    isDialog: Boolean,
+    isUserGesture: Boolean,
+    resultMsg: Message
+): Boolean {
 
-                    val newWebView =
-                        createPopupWebView()
+    val newWebView =
+        createPopupWebView()
 
-                    popupWebView =
-                        newWebView
+    popupWebView =
+        newWebView
 
-                    val decorView =
-                        window.decorView as ViewGroup
+    val decorView =
+        window.decorView as ViewGroup
 
-                    decorView.addView(
-                        newWebView,
-                        ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                    )
+    decorView.addView(
+        newWebView,
+        ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+    )
 
-                    newWebView.bringToFront()
+    newWebView.bringToFront()
 
-                    val transport =
-                        resultMsg.obj as WebView.WebViewTransport
+    newWebView.settings.mediaPlaybackRequiresUserGesture = false
 
-                    transport.webView =
-                        newWebView
+    val transport =
+        resultMsg.obj as WebView.WebViewTransport
 
-                    resultMsg.sendToTarget()
+    transport.webView =
+        newWebView
 
-                    return true
+    resultMsg.sendToTarget()
+
+    return true
+}
                 }
 
                 override fun onCloseWindow(
