@@ -473,11 +473,7 @@ class MainActivity : Activity() {
                     )
 
                     newWebView.bringToFront()
-android.widget.Toast.makeText(
-    this@MainActivity,
-    "PLAYER WINDOW CREATED",
-    android.widget.Toast.LENGTH_LONG
-).show()
+
                     val transport =
                         resultMsg.obj as WebView.WebViewTransport
 
